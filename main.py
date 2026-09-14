@@ -1,4 +1,4 @@
-import os
+import base64
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -10,8 +10,6 @@ from passlib.context import CryptContext
 from itsdangerous import URLSafeTimedSerializer, BadSignature
 
 BASE_DIR = Path(__file__).resolve().parent
-UPLOAD_DIR = BASE_DIR / "static" / "uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = BASE_DIR / "database.db"
 
 SECRET_KEY = "SUPER_SECRET_KEY_VIP_BETS_2026"
@@ -19,7 +17,6 @@ pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 serializer = URLSafeTimedSerializer(SECRET_KEY)
 
 app = FastAPI(title="VIP Bets Platform")
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -376,7 +373,7 @@ def page_admin(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Con
             </div>
             <div class="grid-2">
                 <div class="form-group"><label>Option de pari (ex: Victoire Real Madrid)</label><input type="text" name="bet_type" required></div>
-                <div class="form-group"><label>Côte (ex: 1.85)</label><input type="number" step="0.01" name="odds" required></div>
+                <div class="form-group"><label>Côte (ex: 1.85)</label><input type="text" name="odds" placeholder="1.85" required></div>
             </div>
             <div class="grid-2">
                 <div class="form-group"><label>Indice de confiance (ex: 9/10)</label><input type="text" name="confidence" required></div>
@@ -433,7 +430,7 @@ async def create_bet(
     match_title: str = Form(...),
     league: str = Form(...),
     bet_type: str = Form(...),
-    odds: float = Form(...),
+    odds: str = Form(...),
     confidence: str = Form(...),
     analysis: str = Form(""),
     coupon: Optional[UploadFile] = File(None),
@@ -442,31 +439,31 @@ async def create_bet(
 ):
     if not user or not user["is_admin"]:
         raise HTTPException(status_code=403)
-        
+
+    # Conversion côte sécurisée
+    clean_odds_str = odds.replace(",", ".").strip()
+    try:
+        clean_odds = float(clean_odds_str)
+    except ValueError:
+        clean_odds = 1.0
+
     image_url = None
     if coupon and coupon.filename and len(coupon.filename.strip()) > 0:
         try:
             file_bytes = await coupon.read()
             if len(file_bytes) > 0:
-                safe_name = coupon.filename.replace(" ", "_")
-                filename = f"{os.urandom(6).hex()}_{safe_name}"
-                file_path = UPLOAD_DIR / filename
-                with open(file_path, "wb") as f:
-                    f.write(file_bytes)
-                image_url = f"/static/uploads/{filename}"
+                mime_type = coupon.content_type or "image/jpeg"
+                b64_str = base64.b64encode(file_bytes).decode('utf-8')
+                image_url = f"data:{mime_type};base64,{b64_str}"
         except Exception:
             image_url = None
-    
-    try:
-        cursor = db.cursor()
-        cursor.execute("""
-            INSERT INTO bets (match_title, league, bet_type, odds, confidence, analysis, image_url)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (match_title, league, bet_type, float(odds), confidence, analysis, image_url))
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        return render_html("Erreur Publication", f"<div class='card'><h2 style='color:var(--danger)'>Erreur de publication</h2><p>{str(e)}</p><a href='/admin' class='btn btn-primary'>Retour</a></div>", user)
+
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO bets (match_title, league, bet_type, odds, confidence, analysis, image_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (match_title, league, bet_type, clean_odds, confidence, analysis, image_url))
+    db.commit()
 
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
 
