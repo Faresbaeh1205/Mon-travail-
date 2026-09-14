@@ -17,9 +17,9 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 DB_PATH = BASE_DIR / "database.db"
 
-# Sécurité & Authentication
+# Sécurité & Authentication (Utilisation de PBKDF2 pour éviter tout crash bcrypt/72 bytes)
 SECRET_KEY = "SUPER_SECRET_KEY_VIP_BETS_CHANGE_ME_IN_PRODUCTION"
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 serializer = URLSafeTimedSerializer(SECRET_KEY)
 
 app = FastAPI(title="VIP Bets Platform")
