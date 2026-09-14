@@ -9,7 +9,6 @@ from fastapi.staticfiles import StaticFiles
 from passlib.context import CryptContext
 from itsdangerous import URLSafeTimedSerializer, BadSignature
 
-# Configuration des dossiers
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "static" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -22,7 +21,6 @@ serializer = URLSafeTimedSerializer(SECRET_KEY)
 app = FastAPI(title="VIP Bets Platform")
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
-# --- BASE DE DONNÉES ---
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -59,12 +57,11 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );""")
     
-    # Vérification et migration de sécurité si la colonne image_url manque
     cursor.execute("PRAGMA table_info(bets)")
-    columns = [row[1] for row in cursor.fetchall()]
-    if "image_url" not in columns:
+    cols = [row[1] for row in cursor.fetchall()]
+    if "image_url" not in cols:
         cursor.execute("ALTER TABLE bets ADD COLUMN image_url TEXT;")
-    if "analysis" not in columns:
+    if "analysis" not in cols:
         cursor.execute("ALTER TABLE bets ADD COLUMN analysis TEXT;")
 
     cursor.execute("SELECT * FROM users WHERE email = ?", ("admin@vipbets.com",))
@@ -79,7 +76,6 @@ def init_db():
 
 init_db()
 
-# --- GESTION DE SESSION ---
 def get_current_user(request: Request, db: sqlite3.Connection = Depends(get_db)) -> Optional[dict]:
     session_token = request.cookies.get("session")
     if not session_token:
@@ -93,7 +89,6 @@ def get_current_user(request: Request, db: sqlite3.Connection = Depends(get_db))
     except BadSignature:
         return None
 
-# --- STYLES & LAYOUT ---
 CSS_STYLE = """
 :root { --bg: #0b0f19; --card: #151c2c; --green: #00e676; --gold: #ffd700; --text: #f0f4f8; --muted: #94a3b8; --border: #1e293b; --danger: #ff5252; }
 * { margin:0; padding:0; box-sizing:border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -156,8 +151,6 @@ def render_html(title: str, content: str, user: Optional[dict] = None) -> HTMLRe
 </body>
 </html>"""
     return HTMLResponse(content=full_page)
-
-# --- ROUTES PRINCIPALES ---
 
 @app.get("/")
 def page_index(request: Request, db: sqlite3.Connection = Depends(get_db)):
@@ -320,8 +313,6 @@ def page_vip(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Conne
     content = f"<h1 style='margin-bottom:1.5rem;'>Espace VIP 🔒</h1>{bets_html}"
     return render_html("Espace VIP", content, user)
 
-# --- ADMINISTRATION ---
-
 @app.get("/admin")
 def page_admin(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
     if not user or not user["is_admin"]:
@@ -368,7 +359,7 @@ def page_admin(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Con
         </tr>"""
 
     clear_history_btn = """
-    <form action="/admin/bets/clear-all" method="POST" onsubmit="return confirm('Attention: Voulés-vous vraiment effacer tout l\'historique des paris ?');" style="margin-top:1rem;">
+    <form action="/admin/bets/clear-all" method="POST" onsubmit="return confirm('Attention: Voulez-vous vraiment effacer tout l\'historique des paris ?');" style="margin-top:1rem;">
         <button class="btn btn-danger" style="width:auto; padding:0.6rem 1rem;">Effacer tout l'historique des paris</button>
     </form>
     """ if bets else ""
@@ -463,15 +454,20 @@ async def create_bet(
                 with open(file_path, "wb") as f:
                     f.write(file_bytes)
                 image_url = f"/static/uploads/{filename}"
-        except Exception as e:
+        except Exception:
             image_url = None
     
-    cursor = db.cursor()
-    cursor.execute("""
-        INSERT INTO bets (match_title, league, bet_type, odds, confidence, analysis, image_url)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (match_title, league, bet_type, odds, confidence, analysis, image_url))
-    db.commit()
+    try:
+        cursor = db.cursor()
+        cursor.execute("""
+            INSERT INTO bets (match_title, league, bet_type, odds, confidence, analysis, image_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (match_title, league, bet_type, float(odds), confidence, analysis, image_url))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        return render_html("Erreur Publication", f"<div class='card'><h2 style='color:var(--danger)'>Erreur de publication</h2><p>{str(e)}</p><a href='/admin' class='btn btn-primary'>Retour</a></div>", user)
+
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.post("/admin/bets/{bet_id}/status")
