@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="margin-bottom: 2rem;">
+    <h1>Espace Pronostics VIP 🔒</h1>
+    <p style="color: var(--text-muted);">Pronostics analysés et sélections officielles.</p>
+</div>
+
+{% if not bets %}
+    <div class="card" style="text-align: center; color: var(--text-muted);">
+        Aucun pronostic publié pour le moment. Revenez très rapidement !
+    </div>
+{% endif %}
+
+{% for bet in bets %}
+<div class="card bet-card">
+    <div class="bet-header">
+        <div>
+            <span style="color: var(--text-muted); font-size: 0.85rem;">{{ bet.league }}</span>
+            <h2 style="font-size: 1.3rem;">{{ bet.match_title }}</h2>
+        </div>
+        <div>
+            <span class="badge badge-odds">Côte : {{ bet.odds }}</span>
+            {% if bet.status == 'WON' %}
+                <span class="badge badge-won">GAGNÉ</span>
+            {% elif bet.status == 'LOST' %}
+                <span class="badge badge-lost">PERDU</span>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div style="display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1rem;">
+        <div><strong>Type de pari :</strong> <span style="color: var(--accent-green);">{{ bet.bet_type }}</span></div>
+        <div><strong>Confiance :</strong> {{ bet.confidence }}</div>
+    </div>
+
+    {% if bet.analysis %}
+        <p style="color: var(--text-muted); margin-bottom: 1rem; line-height: 1.5;">
+            {{ bet.analysis }}
+        </p>
+    {% endif %}
+
+    {% if bet.image_url %}
+        <img src="{{ bet.image_url }}" alt="Coupon du pari" class="bet-image">
+    {% endif %}
+</div>
+{% endfor %}
+{% endblock %}
