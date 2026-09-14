@@ -2,3 +2,4 @@ fastapi
 uvicorn
 passlib[pbkdf2]
 itsdangerous
+python-multipart
