@@ -1,11 +1,9 @@
-import base64
 import sqlite3
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Request, Form, File, UploadFile, HTTPException, status, Depends
+from fastapi import FastAPI, Request, Form, HTTPException, status, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
 from passlib.context import CryptContext
 from itsdangerous import URLSafeTimedSerializer, BadSignature
 
@@ -365,8 +363,9 @@ def page_admin(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Con
     <h1 style="margin-bottom:1.5rem;">Panneau Administration</h1>
     
     <div class="card">
-        <h2 style="color:var(--gold); margin-bottom:1rem;">Publier un nouveau pronostic avec photo & analyse</h2>
-        <form action="/admin/bets/create" method="POST" enctype="multipart/form-data">
+        <h2 style="color:var(--gold); margin-bottom:1rem;">Publier un nouveau pronostic</h2>
+        <form id="betForm" action="/admin/bets/create" method="POST">
+            <input type="hidden" id="b64Image" name="b64_image" value="">
             <div class="grid-2">
                 <div class="form-group"><label>Match (ex: Real Madrid vs FC Barcelone)</label><input type="text" name="match_title" required></div>
                 <div class="form-group"><label>Ligue / Compétition</label><input type="text" name="league" placeholder="ex: LaLiga" required></div>
@@ -377,15 +376,28 @@ def page_admin(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Con
             </div>
             <div class="grid-2">
                 <div class="form-group"><label>Indice de confiance (ex: 9/10)</label><input type="text" name="confidence" required></div>
-                <div class="form-group"><label>Capture / Image Coupon (Galerie)</label><input type="file" name="coupon" accept="image/*"></div>
+                <div class="form-group"><label>Capture / Image Coupon (Galerie)</label><input type="file" id="filePicker" accept="image/*"></div>
             </div>
             <div class="form-group">
                 <label>Analyse détaillée du match</label>
                 <textarea name="analysis" rows="5" placeholder="Écris ton analyse ici..."></textarea>
             </div>
-            <button type="submit" class="btn btn-primary">Publier le pronostic dans l'espace VIP</button>
+            <button type="submit" class="btn btn-primary">Publier le pronostic</button>
         </form>
     </div>
+
+    <script>
+        document.getElementById('filePicker').addEventListener('change', function(e) {{
+            const file = e.target.files[0];
+            if (file) {{
+                const reader = new FileReader();
+                reader.onload = function(evt) {{
+                    document.getElementById('b64Image').value = evt.target.result;
+                }};
+                reader.readAsDataURL(file);
+            }}
+        }});
+    </script>
 
     <div class="card">
         <h2 style="margin-bottom:1rem;">Membres inscrits à valider</h2>
@@ -426,37 +438,27 @@ def delete_user(user_id: int, user: Optional[dict] = Depends(get_current_user), 
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.post("/admin/bets/create")
-async def create_bet(
+def create_bet(
     match_title: str = Form(...),
     league: str = Form(...),
     bet_type: str = Form(...),
     odds: str = Form(...),
     confidence: str = Form(...),
     analysis: str = Form(""),
-    coupon: Optional[UploadFile] = File(None),
+    b64_image: Optional[str] = Form(""),
     user: Optional[dict] = Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db)
 ):
     if not user or not user["is_admin"]:
         raise HTTPException(status_code=403)
 
-    # Conversion côte sécurisée
     clean_odds_str = odds.replace(",", ".").strip()
     try:
         clean_odds = float(clean_odds_str)
     except ValueError:
         clean_odds = 1.0
 
-    image_url = None
-    if coupon and coupon.filename and len(coupon.filename.strip()) > 0:
-        try:
-            file_bytes = await coupon.read()
-            if len(file_bytes) > 0:
-                mime_type = coupon.content_type or "image/jpeg"
-                b64_str = base64.b64encode(file_bytes).decode('utf-8')
-                image_url = f"data:{mime_type};base64,{b64_str}"
-        except Exception:
-            image_url = None
+    image_url = b64_image.strip() if b64_image and len(b64_image.strip()) > 0 else None
 
     cursor = db.cursor()
     cursor.execute("""
