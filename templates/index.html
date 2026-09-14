@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <h1>Pronostics Sportifs VIP à Vie</h1>
+    <p>Rejoignez le club exclusif de parieurs pros et obtenez un accès direct aux coupons à forte valeur ajoutée.</p>
+</section>
+
+<div class="grid-2">
+    <!-- Instruction Promo -->
+    <div class="card">
+        <h2 style="color: var(--accent-gold); margin-bottom: 1rem;">Accès VIP Gratuit à Vie</h2>
+        <p style="margin-bottom: 1rem; line-height: 1.6;">
+            Pour débloquer l'accès à nos pronostics VIP, suivez simplement ces instructions :
+        </p>
+        <ol style="margin-left: 1.2rem; line-height: 1.8; color: var(--text-muted);">
+            <li>Cliquez sur le bouton ci-dessous pour créer votre compte 1xBet.</li>
+            <li>Utilisez impérativement le Code Promo officiel : <strong style="color: var(--accent-green);">1x_5670093</strong> lors de l'inscription.</li>
+            <li>Remplissez le formulaire ci-contre avec votre <strong>ID Parieur 1xBet</strong>.</li>
+        </ol>
+
+        <a href="https://refpa1376993.top/L?tag=d_3978377m_1573c_&site=3978377&ad=1573" target="_blank" class="btn btn-affiliate">
+            S'inscrire sur 1xBet avec le code 1x_5670093
+        </a>
+    </div>
+
+    <!-- Formulaire d'inscription -->
+    <div class="card" id="register">
+        <h2 style="margin-bottom: 1rem;">Inscription Plateforme</h2>
+        
+        {% if error %}
+            <div style="color: var(--danger); margin-bottom: 1rem;">{{ error }}</div>
+        {% endif %}
+
+        <form action="/register" method="POST">
+            <div class="form-group">
+                <label>Nom complet</label>
+                <input type="text" name="full_name" required placeholder="John Doe">
+            </div>
+            <div class="form-group">
+                <label>Adresse Email</label>
+                <input type="email" name="email" required placeholder="exemple@mail.com">
+            </div>
+            <div class="form-group">
+                <label>Mot de passe</label>
+                <input type="password" name="password" required>
+            </div>
+            <div class="form-group">
+                <label>ID Parieur 1xBet (Numérique)</label>
+                <input type="text" name="xbet_id" required placeholder="ex: 45892011">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Demander mon accès VIP</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
