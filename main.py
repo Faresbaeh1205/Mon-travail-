@@ -1,6 +1,5 @@
 import os
 import sqlite3
-import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -59,6 +58,15 @@ def init_db():
         status TEXT DEFAULT 'PENDING',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );""")
+    
+    # Vérification et migration de sécurité si la colonne image_url manque
+    cursor.execute("PRAGMA table_info(bets)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if "image_url" not in columns:
+        cursor.execute("ALTER TABLE bets ADD COLUMN image_url TEXT;")
+    if "analysis" not in columns:
+        cursor.execute("ALTER TABLE bets ADD COLUMN analysis TEXT;")
+
     cursor.execute("SELECT * FROM users WHERE email = ?", ("admin@vipbets.com",))
     if not cursor.fetchone():
         admin_pass = pwd_context.hash("AdminVIP2026!")
@@ -85,7 +93,7 @@ def get_current_user(request: Request, db: sqlite3.Connection = Depends(get_db))
     except BadSignature:
         return None
 
-# --- TEMPLATES HTML & STYLES ---
+# --- STYLES & LAYOUT ---
 CSS_STYLE = """
 :root { --bg: #0b0f19; --card: #151c2c; --green: #00e676; --gold: #ffd700; --text: #f0f4f8; --muted: #94a3b8; --border: #1e293b; --danger: #ff5252; }
 * { margin:0; padding:0; box-sizing:border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -112,9 +120,10 @@ body { background-color: var(--bg); color: var(--text); min-height: 100vh; displ
 .badge-odds { background:rgba(255, 215, 0, 0.15); color:var(--gold); border:1px solid var(--gold); }
 .badge-won { background:#00e676; color:#000; }
 .badge-lost { background:#ff5252; color:#fff; }
+.badge-pending { background:#94a3b8; color:#000; }
 .bet-card { border-left:4px solid var(--green); }
 .bet-header { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:0.8rem; margin-bottom:1rem; }
-.bet-img { width:100%; max-height:400px; object-fit:contain; border-radius:8px; margin-top:1rem; background:#000; }
+.bet-img { width:100%; max-height:450px; object-fit:contain; border-radius:8px; margin-top:1rem; background:#000; }
 .analysis-box { background:#0d121d; padding:1rem; border-radius:8px; margin-top:0.8rem; line-height:1.6; white-space: pre-wrap; font-size:0.95rem; }
 table { width:100%; border-collapse:collapse; margin-top:1rem; }
 th, td { padding:0.75rem; text-align:left; border-bottom:1px solid var(--border); font-size:0.85rem; }
@@ -148,7 +157,7 @@ def render_html(title: str, content: str, user: Optional[dict] = None) -> HTMLRe
 </html>"""
     return HTMLResponse(content=full_page)
 
-# --- ROUTES ---
+# --- ROUTES PRINCIPALES ---
 
 @app.get("/")
 def page_index(request: Request, db: sqlite3.Connection = Depends(get_db)):
@@ -279,14 +288,14 @@ def page_vip(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Conne
     
     bets_html = ""
     for b in bets:
-        badge_status = ""
+        badge_status = '<span class="badge badge-pending">EN COURS</span>'
         if b["status"] == "WON":
             badge_status = '<span class="badge badge-won">GAGNÉ</span>'
         elif b["status"] == "LOST":
             badge_status = '<span class="badge badge-lost">PERDU</span>'
             
-        img_html = f'<img src="{b["image_url"]}" class="bet-img">' if b["image_url"] else ""
-        analysis_html = f'<div class="analysis-box"><strong>Analyse complète :</strong><br>{b["analysis"]}</div>' if b["analysis"] else ""
+        img_html = f'<img src="{b["image_url"]}" class="bet-img">' if b.get("image_url") else ""
+        analysis_html = f'<div class="analysis-box"><strong>Analyse complète :</strong><br>{b["analysis"]}</div>' if b.get("analysis") else ""
         
         bets_html += f"""
         <div class="card bet-card">
@@ -306,10 +315,12 @@ def page_vip(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Conne
         </div>"""
     
     if not bets_html:
-        bets_html = "<div class='card'><p style='text-align:center; color:var(--muted)'>Aucun pronostic publié pour le moment.</p></div>"
+        bets_html = "<div class='card'><p style='text-align:center; color:var(--muted)'>Aucun pronostic disponible pour le moment.</p></div>"
 
     content = f"<h1 style='margin-bottom:1.5rem;'>Espace VIP 🔒</h1>{bets_html}"
     return render_html("Espace VIP", content, user)
+
+# --- ADMINISTRATION ---
 
 @app.get("/admin")
 def page_admin(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
@@ -348,13 +359,19 @@ def page_admin(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Con
             <td>{b['match_title']}</td>
             <td>{b['bet_type']}</td>
             <td>{b['odds']}</td>
-            <td>{b['status']}</td>
+            <td><strong>{b['status']}</strong></td>
             <td>
                 <form action="/admin/bets/{b['id']}/status" method="POST" style="display:inline;"><input type="hidden" name="status_val" value="WON"><button class="btn btn-primary" style="padding:0.3rem 0.5rem; font-size:0.7rem;">Gagné</button></form>
                 <form action="/admin/bets/{b['id']}/status" method="POST" style="display:inline;"><input type="hidden" name="status_val" value="LOST"><button class="btn btn-danger" style="padding:0.3rem 0.5rem; font-size:0.7rem;">Perdu</button></form>
                 <form action="/admin/bets/{b['id']}/delete" method="POST" style="display:inline;"><button class="btn btn-danger" style="padding:0.3rem 0.5rem; font-size:0.7rem;">Supprimer</button></form>
             </td>
         </tr>"""
+
+    clear_history_btn = """
+    <form action="/admin/bets/clear-all" method="POST" onsubmit="return confirm('Attention: Voulés-vous vraiment effacer tout l\'historique des paris ?');" style="margin-top:1rem;">
+        <button class="btn btn-danger" style="width:auto; padding:0.6rem 1rem;">Effacer tout l'historique des paris</button>
+    </form>
+    """ if bets else ""
 
     content = f"""
     <h1 style="margin-bottom:1.5rem;">Panneau Administration</h1>
@@ -363,20 +380,20 @@ def page_admin(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Con
         <h2 style="color:var(--gold); margin-bottom:1rem;">Publier un nouveau pronostic avec photo & analyse</h2>
         <form action="/admin/bets/create" method="POST" enctype="multipart/form-data">
             <div class="grid-2">
-                <div class="form-group"><label>Match (ex: PSG vs Real Madrid)</label><input type="text" name="match_title" required></div>
-                <div class="form-group"><label>Ligue / Compétition</label><input type="text" name="league" placeholder="ex: Ligue des Champions" required></div>
+                <div class="form-group"><label>Match (ex: Real Madrid vs FC Barcelone)</label><input type="text" name="match_title" required></div>
+                <div class="form-group"><label>Ligue / Compétition</label><input type="text" name="league" placeholder="ex: LaLiga" required></div>
             </div>
             <div class="grid-2">
-                <div class="form-group"><label>Option de pari (ex: Victoire PSG)</label><input type="text" name="bet_type" required></div>
+                <div class="form-group"><label>Option de pari (ex: Victoire Real Madrid)</label><input type="text" name="bet_type" required></div>
                 <div class="form-group"><label>Côte (ex: 1.85)</label><input type="number" step="0.01" name="odds" required></div>
             </div>
             <div class="grid-2">
                 <div class="form-group"><label>Indice de confiance (ex: 9/10)</label><input type="text" name="confidence" required></div>
-                <div class="form-group"><label>Capture d'écran / Photo (Galerie)</label><input type="file" name="coupon" accept="image/*"></div>
+                <div class="form-group"><label>Capture / Image Coupon (Galerie)</label><input type="file" name="coupon" accept="image/*"></div>
             </div>
             <div class="form-group">
                 <label>Analyse détaillée du match</label>
-                <textarea name="analysis" rows="5" placeholder="Écris ton analyse détaillée ici (statistiques, compositions, forme des équipes...)"></textarea>
+                <textarea name="analysis" rows="5" placeholder="Écris ton analyse ici..."></textarea>
             </div>
             <button type="submit" class="btn btn-primary">Publier le pronostic dans l'espace VIP</button>
         </form>
@@ -393,13 +410,14 @@ def page_admin(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Con
     </div>
 
     <div class="card">
-        <h2 style="margin-bottom:1rem;">Historique des paris</h2>
+        <h2 style="margin-bottom:1rem;">Gestion de l'historique des paris</h2>
         <div style="overflow-x:auto;">
             <table>
                 <thead><tr><th>Match</th><th>Pari</th><th>Côte</th><th>Statut</th><th>Actions</th></tr></thead>
-                <tbody>{bets_rows if bets_rows else '<tr><td colspan="5">Aucun pari publié.</td></tr>'}</tbody>
+                <tbody>{bets_rows if bets_rows else '<tr><td colspan="5">Aucun pari publié pour le moment.</td></tr>'}</tbody>
             </table>
         </div>
+        {clear_history_btn}
     </div>"""
     return render_html("Administration", content, user)
 
@@ -420,7 +438,7 @@ def delete_user(user_id: int, user: Optional[dict] = Depends(get_current_user), 
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.post("/admin/bets/create")
-def create_bet(
+async def create_bet(
     match_title: str = Form(...),
     league: str = Form(...),
     bet_type: str = Form(...),
@@ -435,12 +453,18 @@ def create_bet(
         raise HTTPException(status_code=403)
         
     image_url = None
-    if coupon and coupon.filename:
-        filename = f"{os.urandom(8).hex()}_{coupon.filename}"
-        file_path = UPLOAD_DIR / filename
-        with open(file_path, "wb") as f:
-            shutil.copyfileobj(coupon.file, f)
-        image_url = f"/static/uploads/{filename}"
+    if coupon and coupon.filename and len(coupon.filename.strip()) > 0:
+        try:
+            file_bytes = await coupon.read()
+            if len(file_bytes) > 0:
+                safe_name = coupon.filename.replace(" ", "_")
+                filename = f"{os.urandom(6).hex()}_{safe_name}"
+                file_path = UPLOAD_DIR / filename
+                with open(file_path, "wb") as f:
+                    f.write(file_bytes)
+                image_url = f"/static/uploads/{filename}"
+        except Exception as e:
+            image_url = None
     
     cursor = db.cursor()
     cursor.execute("""
@@ -463,5 +487,13 @@ def delete_bet(bet_id: int, user: Optional[dict] = Depends(get_current_user), db
     if not user or not user["is_admin"]: raise HTTPException(status_code=403)
     cursor = db.cursor()
     cursor.execute("DELETE FROM bets WHERE id = ?", (bet_id,))
+    db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+
+@app.post("/admin/bets/clear-all")
+def clear_all_bets(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+    if not user or not user["is_admin"]: raise HTTPException(status_code=403)
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM bets")
     db.commit()
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
