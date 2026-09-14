@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -89,7 +90,7 @@ CSS_STYLE = """
 :root { --bg: #0b0f19; --card: #151c2c; --green: #00e676; --gold: #ffd700; --text: #f0f4f8; --muted: #94a3b8; --border: #1e293b; --danger: #ff5252; }
 * { margin:0; padding:0; box-sizing:border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
 body { background-color: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
-.navbar { display:flex; justify-content:space-between; align-items:center; padding:1rem 1.5rem; background:rgba(21, 28, 44, 0.95); border-bottom:1px solid var(--border); sticky; top:0; z-index:100; }
+.navbar { display:flex; justify-content:space-between; align-items:center; padding:1rem 1.5rem; background:rgba(21, 28, 44, 0.95); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; }
 .logo { font-size:1.4rem; font-weight:800; color:var(--gold); text-decoration:none; }
 .logo span { color:var(--green); }
 .nav-links a { color:var(--text); text-decoration:none; margin-left:1rem; font-weight:600; font-size:0.9rem; }
@@ -419,7 +420,7 @@ def delete_user(user_id: int, user: Optional[dict] = Depends(get_current_user), 
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.post("/admin/bets/create")
-async def create_bet(
+def create_bet(
     match_title: str = Form(...),
     league: str = Form(...),
     bet_type: str = Form(...),
@@ -430,13 +431,15 @@ async def create_bet(
     user: Optional[dict] = Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    if not user or not user["is_admin"]: raise HTTPException(status_code=403)
+    if not user or not user["is_admin"]:
+        raise HTTPException(status_code=403)
+        
     image_url = None
     if coupon and coupon.filename:
         filename = f"{os.urandom(8).hex()}_{coupon.filename}"
         file_path = UPLOAD_DIR / filename
         with open(file_path, "wb") as f:
-            f.write(await coupon.read())
+            shutil.copyfileobj(coupon.file, f)
         image_url = f"/static/uploads/{filename}"
     
     cursor = db.cursor()
