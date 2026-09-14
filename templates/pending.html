@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 4rem auto; text-align: center;" class="card">
+    <h1 style="color: var(--accent-gold); margin-bottom: 1rem;">Compte en attente de vérification</h1>
+    <p style="color: var(--text-muted); line-height: 1.6; margin-bottom: 1.5rem;">
+        Bienvenue <strong>{{ user.full_name }}</strong> ! Vos informations ont bien été reçues.
+    </p>
+    <div style="background-color: #0d121d; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+        ID 1xBet soumis : <strong>{{ user.xbet_id }}</strong>
+    </div>
+    <p style="color: var(--text-muted); font-size: 0.95rem;">
+        Notre équipe vérifie actuellement l'utilisation du code promo <strong>1x_5670093</strong> pour votre compte. La validation prend généralement entre 5 minutes et 2 heures.
+    </p>
+</div>
+{% endblock %}
