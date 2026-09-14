@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from passlib.context import CryptContext
 from itsdangerous import URLSafeTimedSerializer, BadSignature
 
-# Config & Repertoires
+# Configuration des dossiers
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "static" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -22,7 +22,7 @@ serializer = URLSafeTimedSerializer(SECRET_KEY)
 app = FastAPI(title="VIP Bets Platform")
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
-# --- BASE DE DONNEES ---
+# --- BASE DE DONNÉES ---
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -70,7 +70,7 @@ def init_db():
 
 init_db()
 
-# --- HELPER SESSION ---
+# --- GESTION DE SESSION ---
 def get_current_user(request: Request, db: sqlite3.Connection = Depends(get_db)) -> Optional[dict]:
     session_token = request.cookies.get("session")
     if not session_token:
@@ -84,44 +84,43 @@ def get_current_user(request: Request, db: sqlite3.Connection = Depends(get_db))
     except BadSignature:
         return None
 
-# --- DESIGN & STYLES (CSS ENCAPSULÉ) ---
-STYLE_CSS = """
-<style>
-  :root { --bg: #0b0f19; --card: #151c2c; --green: #00e676; --gold: #ffd700; --text: #f0f4f8; --muted: #94a3b8; --border: #1e293b; --danger: #ff5252; }
-  * { margin:0; padding:0; box-sizing:border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  body { background-color: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
-  .navbar { display:flex; justify-between:space-between; align-items:center; padding:1rem 2rem; background:rgba(21, 28, 44, 0.95); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; justify-content: space-between;}
-  .logo { font-size:1.4rem; font-weight:800; color:var(--gold); text-decoration:none; }
-  .logo span { color:var(--green); }
-  .nav-links a { color:var(--text); text-decoration:none; margin-left:1.2rem; font-weight:600; font-size:0.95rem; }
-  .container { max-width:1100px; margin:0 auto; padding:2rem 1rem; width:100%; flex:1; }
-  .btn { display:inline-block; padding:0.8rem 1.5rem; border-radius:8px; font-weight:700; text-decoration:none; border:none; cursor:pointer; text-align:center; }
-  .btn-primary { background:linear-gradient(135deg, var(--green), #00b0ff); color:#000; width:100%; }
-  .btn-affiliate { background:linear-gradient(135deg, var(--gold), #ff9100); color:#000; font-size:1.05rem; width:100%; padding:1rem; margin:1rem 0; display:block; }
-  .btn-danger { background-color:var(--danger); color:#fff; }
-  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin-bottom:1.5rem; }
-  .hero { text-align:center; padding:2rem 0; }
-  .hero h1 { font-size:2.4rem; color:var(--gold); margin-bottom:0.5rem; }
-  .hero p { color:var(--muted); font-size:1.1rem; }
-  .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap:2rem; }
-  @media(max-width:768px){ .grid-2 { grid-template-columns:1fr; } .hero h1 { font-size:1.8rem; } }
-  .form-group { margin-bottom:1rem; }
-  .form-group label { display:block; margin-bottom:0.4rem; color:var(--muted); font-size:0.9rem; }
-  .form-group input, .form-group textarea { width:100%; padding:0.75rem; background:#0d121d; border:1px solid var(--border); border-radius:6px; color:#fff; }
-  .badge { padding:0.3rem 0.6rem; border-radius:20px; font-size:0.8rem; font-weight:bold; }
-  .badge-odds { background:rgba(255, 215, 0, 0.15); color:var(--gold); border:1px solid var(--gold); }
-  .badge-won { background:#00e676; color:#000; }
-  .badge-lost { background:#ff5252; color:#fff; }
-  .bet-card { border-left:4px solid var(--green); }
-  .bet-header { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:0.8rem; margin-bottom:1rem; }
-  .bet-img { width:100%; max-height:350px; object-fit:cover; border-radius:8px; margin-top:1rem; }
-  table { width:100%; border-collapse:collapse; margin-top:1rem; }
-  th, td { padding:0.75rem; text-align:left; border-bottom:1px solid var(--border); font-size:0.9rem; }
-  th { color:var(--muted); }
-</style>
+# --- TEMPLATES HTML & STYLES ---
+CSS_STYLE = """
+:root { --bg: #0b0f19; --card: #151c2c; --green: #00e676; --gold: #ffd700; --text: #f0f4f8; --muted: #94a3b8; --border: #1e293b; --danger: #ff5252; }
+* { margin:0; padding:0; box-sizing:border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+body { background-color: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+.navbar { display:flex; justify-content:space-between; align-items:center; padding:1rem 1.5rem; background:rgba(21, 28, 44, 0.95); border-bottom:1px solid var(--border); sticky; top:0; z-index:100; }
+.logo { font-size:1.4rem; font-weight:800; color:var(--gold); text-decoration:none; }
+.logo span { color:var(--green); }
+.nav-links a { color:var(--text); text-decoration:none; margin-left:1rem; font-weight:600; font-size:0.9rem; }
+.container { max-width:1100px; margin:0 auto; padding:1.5rem 1rem; width:100%; flex:1; }
+.btn { display:inline-block; padding:0.8rem 1.2rem; border-radius:8px; font-weight:700; text-decoration:none; border:none; cursor:pointer; text-align:center; }
+.btn-primary { background:linear-gradient(135deg, var(--green), #00b0ff); color:#000; width:100%; margin-top:0.5rem; }
+.btn-affiliate { background:linear-gradient(135deg, var(--gold), #ff9100); color:#000; font-size:1rem; width:100%; padding:0.9rem; margin:1rem 0; display:block; }
+.btn-danger { background-color:var(--danger); color:#fff; }
+.card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.2rem; margin-bottom:1.5rem; }
+.hero { text-align:center; padding:1.5rem 0; }
+.hero h1 { font-size:2rem; color:var(--gold); margin-bottom:0.5rem; }
+.hero p { color:var(--muted); font-size:1rem; }
+.grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; }
+@media(max-width:768px){ .grid-2 { grid-template-columns:1fr; } }
+.form-group { margin-bottom:1rem; }
+.form-group label { display:block; margin-bottom:0.4rem; color:var(--muted); font-size:0.85rem; }
+.form-group input, .form-group textarea { width:100%; padding:0.75rem; background:#0d121d; border:1px solid var(--border); border-radius:6px; color:#fff; font-size:0.95rem; }
+.badge { padding:0.3rem 0.6rem; border-radius:20px; font-size:0.8rem; font-weight:bold; }
+.badge-odds { background:rgba(255, 215, 0, 0.15); color:var(--gold); border:1px solid var(--gold); }
+.badge-won { background:#00e676; color:#000; }
+.badge-lost { background:#ff5252; color:#fff; }
+.bet-card { border-left:4px solid var(--green); }
+.bet-header { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:0.8rem; margin-bottom:1rem; }
+.bet-img { width:100%; max-height:400px; object-fit:contain; border-radius:8px; margin-top:1rem; background:#000; }
+.analysis-box { background:#0d121d; padding:1rem; border-radius:8px; margin-top:0.8rem; line-height:1.6; white-space: pre-wrap; font-size:0.95rem; }
+table { width:100%; border-collapse:collapse; margin-top:1rem; }
+th, td { padding:0.75rem; text-align:left; border-bottom:1px solid var(--border); font-size:0.85rem; }
+th { color:var(--muted); }
 """
 
-def render_page(title: str, content: str, user: Optional[dict] = None) -> str:
+def render_html(title: str, content: str, user: Optional[dict] = None) -> HTMLResponse:
     nav_links = ""
     if user:
         if user.get("is_admin"):
@@ -130,13 +129,13 @@ def render_page(title: str, content: str, user: Optional[dict] = None) -> str:
     else:
         nav_links += '<a href="/login">Connexion</a><a href="/#register" style="color:var(--green)">S\'inscrire</a>'
 
-    return f"""<!DOCTYPE html>
+    full_page = f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title}</title>
-    {STYLE_CSS}
+    <style>{CSS_STYLE}</style>
 </head>
 <body>
     <nav class="navbar">
@@ -146,10 +145,11 @@ def render_page(title: str, content: str, user: Optional[dict] = None) -> str:
     <div class="container">{content}</div>
 </body>
 </html>"""
+    return HTMLResponse(content=full_page)
 
-# --- ROUTES & CONTROLEURS ---
+# --- ROUTES ---
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/")
 def page_index(request: Request, db: sqlite3.Connection = Depends(get_db)):
     user = get_current_user(request, db)
     content = """
@@ -181,11 +181,10 @@ def page_index(request: Request, db: sqlite3.Connection = Depends(get_db)):
         </div>
     </div>
     """
-    return render_page("VIP Bets - Accueil", content, user)
+    return render_html("VIP Bets - Accueil", content, user)
 
 @app.post("/register")
 def register(
-    request: Request,
     full_name: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
@@ -195,7 +194,7 @@ def register(
     cursor = db.cursor()
     cursor.execute("SELECT id FROM users WHERE email = ?", (email.lower().strip(),))
     if cursor.fetchone():
-        return render_page("Erreur", "<div class='card'><p style='color:var(--danger)'>Cet email est déjà inscrit.</p></div>")
+        return render_html("Erreur", "<div class='card'><p style='color:var(--danger)'>Cet email est déjà inscrit.</p></div>")
     
     hashed_pwd = pwd_context.hash(password)
     cursor.execute("INSERT INTO users (full_name, email, password_hash, xbet_id, is_vip, is_admin) VALUES (?, ?, ?, ?, 0, 0)",
@@ -207,8 +206,8 @@ def register(
     response.set_cookie(key="session", value=serializer.dumps(user_id), httponly=True)
     return response
 
-@app.get("/login", response_class=HTMLResponse)
-def page_login(request: Request, user: Optional[dict] = Depends(get_current_user)):
+@app.get("/login")
+def page_login(user: Optional[dict] = Depends(get_current_user)):
     if user:
         return RedirectResponse(url="/vip" if user["is_vip"] else "/pending")
     content = """
@@ -220,11 +219,10 @@ def page_login(request: Request, user: Optional[dict] = Depends(get_current_user
             <button type="submit" class="btn btn-primary">Se connecter</button>
         </form>
     </div>"""
-    return render_page("Connexion VIP", content)
+    return render_html("Connexion VIP", content)
 
 @app.post("/login")
 def login(
-    request: Request,
     email: str = Form(...),
     password: str = Form(...),
     db: sqlite3.Connection = Depends(get_db)
@@ -234,7 +232,7 @@ def login(
     user = cursor.fetchone()
     
     if not user or not pwd_context.verify(password, user["password_hash"]):
-        return render_page("Erreur", "<div class='card'><p style='color:var(--danger)'>Identifiants invalides.</p></div>")
+        return render_html("Erreur", "<div class='card'><p style='color:var(--danger)'>Identifiants invalides.</p></div>")
     
     dest = "/admin" if user["is_admin"] else ("/vip" if user["is_vip"] else "/pending")
     response = RedirectResponse(url=dest, status_code=status.HTTP_303_SEE_OTHER)
@@ -247,8 +245,8 @@ def logout():
     response.delete_cookie("session")
     return response
 
-@app.get("/pending", response_class=HTMLResponse)
-def page_pending(request: Request, user: Optional[dict] = Depends(get_current_user)):
+@app.get("/pending")
+def page_pending(user: Optional[dict] = Depends(get_current_user)):
     if not user:
         return RedirectResponse(url="/login")
     if user["is_vip"]:
@@ -265,10 +263,10 @@ def page_pending(request: Request, user: Optional[dict] = Depends(get_current_us
             Nous vérifions l'utilisation du code promo <strong>1x_5670093</strong>. La validation prend entre 5 minutes et 2 heures.
         </p>
     </div>"""
-    return render_page("Attente de Validation", content, user)
+    return render_html("Attente de Validation", content, user)
 
-@app.get("/vip", response_class=HTMLResponse)
-def page_vip(request: Request, user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+@app.get("/vip")
+def page_vip(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
     if not user:
         return RedirectResponse(url="/login")
     if not user["is_vip"] and not user["is_admin"]:
@@ -287,21 +285,22 @@ def page_vip(request: Request, user: Optional[dict] = Depends(get_current_user),
             badge_status = '<span class="badge badge-lost">PERDU</span>'
             
         img_html = f'<img src="{b["image_url"]}" class="bet-img">' if b["image_url"] else ""
+        analysis_html = f'<div class="analysis-box"><strong>Analyse complète :</strong><br>{b["analysis"]}</div>' if b["analysis"] else ""
         
         bets_html += f"""
         <div class="card bet-card">
             <div class="bet-header">
                 <div>
                     <span style="color:var(--muted); font-size:0.85rem;">{b['league']}</span>
-                    <h2 style="font-size:1.2rem;">{b['match_title']}</h2>
+                    <h2 style="font-size:1.3rem;">{b['match_title']}</h2>
                 </div>
                 <div>
                     <span class="badge badge-odds">Côte: {b['odds']}</span>
                     {badge_status}
                 </div>
             </div>
-            <p><strong>Pronostic :</strong> <span style="color:var(--green)">{b['bet_type']}</span> | <strong>Confiance :</strong> {b['confidence']}</p>
-            <p style="color:var(--muted); margin-top:0.5rem;">{b['analysis']}</p>
+            <p style="margin-bottom:0.5rem;"><strong>Pronostic :</strong> <span style="color:var(--green); font-weight:bold;">{b['bet_type']}</span> | <strong>Confiance :</strong> {b['confidence']}</p>
+            {analysis_html}
             {img_html}
         </div>"""
     
@@ -309,10 +308,10 @@ def page_vip(request: Request, user: Optional[dict] = Depends(get_current_user),
         bets_html = "<div class='card'><p style='text-align:center; color:var(--muted)'>Aucun pronostic publié pour le moment.</p></div>"
 
     content = f"<h1 style='margin-bottom:1.5rem;'>Espace VIP 🔒</h1>{bets_html}"
-    return render_page("Espace VIP", content, user)
+    return render_html("Espace VIP", content, user)
 
-@app.get("/admin", response_class=HTMLResponse)
-def page_admin(request: Request, user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+@app.get("/admin")
+def page_admin(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
     if not user or not user["is_admin"]:
         return RedirectResponse(url="/login")
     
@@ -325,7 +324,7 @@ def page_admin(request: Request, user: Optional[dict] = Depends(get_current_user
     users_rows = ""
     for u in users:
         status_badge = '<span class="badge badge-won">VIP</span>' if u["is_vip"] else '<span class="badge badge-lost">En attente</span>'
-        val_btn = f'<form action="/admin/users/{u["id"]}/validate" method="POST" style="display:inline;"><button class="btn btn-primary" style="padding:0.2rem 0.5rem; font-size:0.75rem;">Valider VIP</button></form>' if not u["is_vip"] else ""
+        val_btn = f'<form action="/admin/users/{u["id"]}/validate" method="POST" style="display:inline;"><button class="btn btn-primary" style="padding:0.3rem 0.6rem; font-size:0.75rem;">Valider VIP</button></form>' if not u["is_vip"] else ""
         
         users_rows += f"""
         <tr>
@@ -336,7 +335,7 @@ def page_admin(request: Request, user: Optional[dict] = Depends(get_current_user
             <td>
                 {val_btn}
                 <form action="/admin/users/{u['id']}/delete" method="POST" style="display:inline;">
-                    <button class="btn btn-danger" style="padding:0.2rem 0.5rem; font-size:0.75rem;">Supprimer</button>
+                    <button class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.75rem;">Supprimer</button>
                 </form>
             </td>
         </tr>"""
@@ -350,54 +349,58 @@ def page_admin(request: Request, user: Optional[dict] = Depends(get_current_user
             <td>{b['odds']}</td>
             <td>{b['status']}</td>
             <td>
-                <form action="/admin/bets/{b['id']}/status" method="POST" style="display:inline;"><input type="hidden" name="status_val" value="WON"><button class="btn btn-primary" style="padding:0.2rem 0.4rem; font-size:0.7rem;">Gagné</button></form>
-                <form action="/admin/bets/{b['id']}/status" method="POST" style="display:inline;"><input type="hidden" name="status_val" value="LOST"><button class="btn btn-danger" style="padding:0.2rem 0.4rem; font-size:0.7rem;">Perdu</button></form>
-                <form action="/admin/bets/{b['id']}/delete" method="POST" style="display:inline;"><button class="btn btn-danger" style="padding:0.2rem 0.4rem; font-size:0.7rem;">X</button></form>
+                <form action="/admin/bets/{b['id']}/status" method="POST" style="display:inline;"><input type="hidden" name="status_val" value="WON"><button class="btn btn-primary" style="padding:0.3rem 0.5rem; font-size:0.7rem;">Gagné</button></form>
+                <form action="/admin/bets/{b['id']}/status" method="POST" style="display:inline;"><input type="hidden" name="status_val" value="LOST"><button class="btn btn-danger" style="padding:0.3rem 0.5rem; font-size:0.7rem;">Perdu</button></form>
+                <form action="/admin/bets/{b['id']}/delete" method="POST" style="display:inline;"><button class="btn btn-danger" style="padding:0.3rem 0.5rem; font-size:0.7rem;">Supprimer</button></form>
             </td>
         </tr>"""
 
     content = f"""
     <h1 style="margin-bottom:1.5rem;">Panneau Administration</h1>
+    
     <div class="card">
-        <h2>Publier un pronostic</h2>
-        <form action="/admin/bets/create" method="POST" enctype="multipart/form-data" style="margin-top:1rem;">
+        <h2 style="color:var(--gold); margin-bottom:1rem;">Publier un nouveau pronostic avec photo & analyse</h2>
+        <form action="/admin/bets/create" method="POST" enctype="multipart/form-data">
             <div class="grid-2">
-                <div class="form-group"><label>Match</label><input type="text" name="match_title" required></div>
-                <div class="form-group"><label>Ligue</label><input type="text" name="league" required></div>
+                <div class="form-group"><label>Match (ex: PSG vs Real Madrid)</label><input type="text" name="match_title" required></div>
+                <div class="form-group"><label>Ligue / Compétition</label><input type="text" name="league" placeholder="ex: Ligue des Champions" required></div>
             </div>
             <div class="grid-2">
-                <div class="form-group"><label>Pronostic</label><input type="text" name="bet_type" required></div>
-                <div class="form-group"><label>Côte</label><input type="number" step="0.01" name="odds" required></div>
+                <div class="form-group"><label>Option de pari (ex: Victoire PSG)</label><input type="text" name="bet_type" required></div>
+                <div class="form-group"><label>Côte (ex: 1.85)</label><input type="number" step="0.01" name="odds" required></div>
             </div>
             <div class="grid-2">
-                <div class="form-group"><label>Confiance</label><input type="text" name="confidence" placeholder="ex: 9/10" required></div>
-                <div class="form-group"><label>Coupon (Image)</label><input type="file" name="coupon" accept="image/*"></div>
+                <div class="form-group"><label>Indice de confiance (ex: 9/10)</label><input type="text" name="confidence" required></div>
+                <div class="form-group"><label>Capture d'écran / Photo (Galerie)</label><input type="file" name="coupon" accept="image/*"></div>
             </div>
-            <div class="form-group"><label>Analyse</label><textarea name="analysis" rows="2"></textarea></div>
-            <button type="submit" class="btn btn-primary">Publier</button>
+            <div class="form-group">
+                <label>Analyse détaillée du match</label>
+                <textarea name="analysis" rows="5" placeholder="Écris ton analyse détaillée ici (statistiques, compositions, forme des équipes...)"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Publier le pronostic dans l'espace VIP</button>
         </form>
     </div>
 
     <div class="card">
-        <h2>Membres inscrits</h2>
+        <h2 style="margin-bottom:1rem;">Membres inscrits à valider</h2>
         <div style="overflow-x:auto;">
             <table>
                 <thead><tr><th>Nom</th><th>Email</th><th>ID 1xBet</th><th>Statut</th><th>Actions</th></tr></thead>
-                <tbody>{users_rows}</tbody>
+                <tbody>{users_rows if users_rows else '<tr><td colspan="5">Aucun membre inscrit.</td></tr>'}</tbody>
             </table>
         </div>
     </div>
 
     <div class="card">
-        <h2>Paris publiés</h2>
+        <h2 style="margin-bottom:1rem;">Historique des paris</h2>
         <div style="overflow-x:auto;">
             <table>
                 <thead><tr><th>Match</th><th>Pari</th><th>Côte</th><th>Statut</th><th>Actions</th></tr></thead>
-                <tbody>{bets_rows}</tbody>
+                <tbody>{bets_rows if bets_rows else '<tr><td colspan="5">Aucun pari publié.</td></tr>'}</tbody>
             </table>
         </div>
     </div>"""
-    return render_page("Administration", content, user)
+    return render_html("Administration", content, user)
 
 @app.post("/admin/users/{user_id}/validate")
 def validate_vip(user_id: int, user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
