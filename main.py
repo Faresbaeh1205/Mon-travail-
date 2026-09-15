@@ -13,7 +13,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session
 # ------------------------------------------------------------------
 # CONFIGURATION ET CONNEXION SUPABASE (POSTGRESQL)
 # ------------------------------------------------------------------
-DEFAULT_DB_URL = "postgresql://postgres:Mamapapa2024%40%40%40@db.rsnrnxocfwbdepqvyigc.supabase.co:5432/postgres"
+DEFAULT_DB_URL = "postgresql://postgres:Mamapapa2024%40%40%40@db.rsnrnxocfwbdepqvyigc.supabase.co:6543/postgres"
 DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DB_URL)
 
 # Correctif si Render passe une URL en 'postgres://'
