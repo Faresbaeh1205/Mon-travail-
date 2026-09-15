@@ -1,4 +1,4 @@
-import sqlite3
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -7,8 +7,60 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from passlib.context import CryptContext
 from itsdangerous import URLSafeTimedSerializer, BadSignature
 
-BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "database.db"
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, Text, DateTime, func
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
+
+# ------------------------------------------------------------------
+# CONFIGURATION ET CONNEXION SUPABASE (POSTGRESQL)
+# ------------------------------------------------------------------
+DEFAULT_DB_URL = "postgresql://postgres:Mamapapa2024%40%40%40@db.rsnrnxocfwbdepqvyigc.supabase.co:5432/postgres"
+DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DB_URL)
+
+# Correctif si Render passe une URL en 'postgres://'
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=20
+)
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# ------------------------------------------------------------------
+# MODÈLES DE DONNÉES (POSTGRESQL)
+# ------------------------------------------------------------------
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    full_name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    xbet_id = Column(String, nullable=False)
+    is_vip = Column(Boolean, default=False)
+    is_admin = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Bet(Base):
+    __tablename__ = "bets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    match_title = Column(String, nullable=False)
+    league = Column(String, nullable=False)
+    bet_type = Column(String, nullable=False)
+    odds = Column(Float, nullable=False)
+    confidence = Column(String, nullable=False)
+    analysis = Column(Text, nullable=True)
+    image_url = Column(Text, nullable=True)
+    status = Column(String, default="PENDING")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+# Initialisation des tables et création de l'administrateur
+Base.metadata.create_all(bind=engine)
 
 SECRET_KEY = "SUPER_SECRET_KEY_VIP_BETS_2026"
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
@@ -17,70 +69,54 @@ serializer = URLSafeTimedSerializer(SECRET_KEY)
 app = FastAPI(title="VIP Bets Platform")
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    db = SessionLocal()
     try:
-        yield conn
+        yield db
     finally:
-        conn.close()
+        db.close()
 
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        full_name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        xbet_id TEXT NOT NULL,
-        is_vip BOOLEAN DEFAULT 0,
-        is_admin BOOLEAN DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );""")
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS bets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        match_title TEXT NOT NULL,
-        league TEXT NOT NULL,
-        bet_type TEXT NOT NULL,
-        odds REAL NOT NULL,
-        confidence TEXT NOT NULL,
-        analysis TEXT,
-        image_url TEXT,
-        status TEXT DEFAULT 'PENDING',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );""")
-    
-    cursor.execute("PRAGMA table_info(bets)")
-    cols = [row[1] for row in cursor.fetchall()]
-    if "image_url" not in cols:
-        cursor.execute("ALTER TABLE bets ADD COLUMN image_url TEXT;")
-    if "analysis" not in cols:
-        cursor.execute("ALTER TABLE bets ADD COLUMN analysis TEXT;")
+def init_admin():
+    db = SessionLocal()
+    try:
+        admin = db.query(User).filter(User.email == "admin@vipbets.com").first()
+        if not admin:
+            admin_pass = pwd_context.hash("AdminVIP2026!")
+            admin_user = User(
+                full_name="Administrateur VIP",
+                email="admin@vipbets.com",
+                password_hash=admin_pass,
+                xbet_id="0000000",
+                is_vip=True,
+                is_admin=True
+            )
+            db.add(admin_user)
+            db.commit()
+    finally:
+        db.close()
 
-    cursor.execute("SELECT * FROM users WHERE email = ?", ("admin@vipbets.com",))
-    if not cursor.fetchone():
-        admin_pass = pwd_context.hash("AdminVIP2026!")
-        cursor.execute("""
-            INSERT INTO users (full_name, email, password_hash, xbet_id, is_vip, is_admin)
-            VALUES (?, ?, ?, ?, 1, 1)
-        """, ("Administrateur VIP", "admin@vipbets.com", admin_pass, "0000000"))
-    conn.commit()
-    conn.close()
+init_admin()
 
-init_db()
-
-def get_current_user(request: Request, db: sqlite3.Connection = Depends(get_db)) -> Optional[dict]:
+# ------------------------------------------------------------------
+# GESTION UTILISATEUR & INTERACTION
+# ------------------------------------------------------------------
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> Optional[dict]:
     session_token = request.cookies.get("session")
     if not session_token:
         return None
     try:
         user_id = serializer.loads(session_token, max_age=86400 * 7)
-        cursor = db.cursor()
-        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-        user = cursor.fetchone()
-        return dict(user) if user else None
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            return {
+                "id": user.id,
+                "full_name": user.full_name,
+                "email": user.email,
+                "password_hash": user.password_hash,
+                "xbet_id": user.xbet_id,
+                "is_vip": user.is_vip,
+                "is_admin": user.is_admin,
+            }
+        return None
     except BadSignature:
         return None
 
@@ -147,8 +183,11 @@ def render_html(title: str, content: str, user: Optional[dict] = None) -> HTMLRe
 </html>"""
     return HTMLResponse(content=full_page)
 
+# ------------------------------------------------------------------
+# ROUTES DE L'APPLICATION
+# ------------------------------------------------------------------
 @app.get("/")
-def page_index(request: Request, db: sqlite3.Connection = Depends(get_db)):
+def page_index(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
     content = """
     <section class="hero">
@@ -187,25 +226,33 @@ def register(
     email: str = Form(...),
     password: str = Form(...),
     xbet_id: str = Form(...),
-    db: sqlite3.Connection = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
-    cursor = db.cursor()
-    cursor.execute("SELECT id FROM users WHERE email = ?", (email.lower().strip(),))
-    if cursor.fetchone():
+    clean_email = email.lower().strip()
+    existing_user = db.query(User).filter(User.email == clean_email).first()
+    if existing_user:
         return render_html("Erreur", "<div class='card'><p style='color:var(--danger)'>Cet email est déjà inscrit.</p></div>")
     
     hashed_pwd = pwd_context.hash(password)
-    cursor.execute("INSERT INTO users (full_name, email, password_hash, xbet_id, is_vip, is_admin) VALUES (?, ?, ?, ?, 0, 0)",
-                   (full_name, email.lower().strip(), hashed_pwd, xbet_id.strip()))
+    new_user = User(
+        full_name=full_name,
+        email=clean_email,
+        password_hash=hashed_pwd,
+        xbet_id=xbet_id.strip(),
+        is_vip=False,
+        is_admin=False
+    )
+    db.add(new_user)
     db.commit()
-    user_id = cursor.lastrowid
+    db.refresh(new_user)
 
     response = RedirectResponse(url="/pending", status_code=status.HTTP_303_SEE_OTHER)
-    response.set_cookie(key="session", value=serializer.dumps(user_id), httponly=True)
+    response.set_cookie(key="session", value=serializer.dumps(new_user.id), httponly=True)
     return response
 
 @app.get("/login")
-def page_login(user: Optional[dict] = Depends(get_current_user)):
+def page_login(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
     if user:
         return RedirectResponse(url="/vip" if user["is_vip"] else "/pending")
     content = """
@@ -223,18 +270,17 @@ def page_login(user: Optional[dict] = Depends(get_current_user)):
 def login(
     email: str = Form(...),
     password: str = Form(...),
-    db: sqlite3.Connection = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = ?", (email.lower().strip(),))
-    user = cursor.fetchone()
+    clean_email = email.lower().strip()
+    user = db.query(User).filter(User.email == clean_email).first()
     
-    if not user or not pwd_context.verify(password, user["password_hash"]):
+    if not user or not pwd_context.verify(password, user.password_hash):
         return render_html("Erreur", "<div class='card'><p style='color:var(--danger)'>Identifiants invalides.</p></div>")
     
-    dest = "/admin" if user["is_admin"] else ("/vip" if user["is_vip"] else "/pending")
+    dest = "/admin" if user.is_admin else ("/vip" if user.is_vip else "/pending")
     response = RedirectResponse(url=dest, status_code=status.HTTP_303_SEE_OTHER)
-    response.set_cookie(key="session", value=serializer.dumps(user["id"]), httponly=True)
+    response.set_cookie(key="session", value=serializer.dumps(user.id), httponly=True)
     return response
 
 @app.get("/logout")
@@ -244,7 +290,8 @@ def logout():
     return response
 
 @app.get("/pending")
-def page_pending(user: Optional[dict] = Depends(get_current_user)):
+def page_pending(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
     if not user:
         return RedirectResponse(url="/login")
     if user["is_vip"]:
@@ -264,40 +311,39 @@ def page_pending(user: Optional[dict] = Depends(get_current_user)):
     return render_html("Attente de Validation", content, user)
 
 @app.get("/vip")
-def page_vip(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+def page_vip(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
     if not user:
         return RedirectResponse(url="/login")
     if not user["is_vip"] and not user["is_admin"]:
         return RedirectResponse(url="/pending")
     
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM bets ORDER BY created_at DESC")
-    bets = [dict(row) for row in cursor.fetchall()]
+    bets = db.query(Bet).order_by(Bet.created_at.desc()).all()
     
     bets_html = ""
     for b in bets:
         badge_status = '<span class="badge badge-pending">EN COURS</span>'
-        if b["status"] == "WON":
+        if b.status == "WON":
             badge_status = '<span class="badge badge-won">GAGNÉ</span>'
-        elif b["status"] == "LOST":
+        elif b.status == "LOST":
             badge_status = '<span class="badge badge-lost">PERDU</span>'
             
-        img_html = f'<img src="{b["image_url"]}" class="bet-img">' if b.get("image_url") else ""
-        analysis_html = f'<div class="analysis-box"><strong>Analyse complète :</strong><br>{b["analysis"]}</div>' if b.get("analysis") else ""
+        img_html = f'<img src="{b.image_url}" class="bet-img">' if b.image_url else ""
+        analysis_html = f'<div class="analysis-box"><strong>Analyse complète :</strong><br>{b.analysis}</div>' if b.analysis else ""
         
         bets_html += f"""
         <div class="card bet-card">
             <div class="bet-header">
                 <div>
-                    <span style="color:var(--muted); font-size:0.85rem;">{b['league']}</span>
-                    <h2 style="font-size:1.3rem;">{b['match_title']}</h2>
+                    <span style="color:var(--muted); font-size:0.85rem;">{b.league}</span>
+                    <h2 style="font-size:1.3rem;">{b.match_title}</h2>
                 </div>
                 <div>
-                    <span class="badge badge-odds">Côte: {b['odds']}</span>
+                    <span class="badge badge-odds">Côte: {b.odds}</span>
                     {badge_status}
                 </div>
             </div>
-            <p style="margin-bottom:0.5rem;"><strong>Pronostic :</strong> <span style="color:var(--green); font-weight:bold;">{b['bet_type']}</span> | <strong>Confiance :</strong> {b['confidence']}</p>
+            <p style="margin-bottom:0.5rem;"><strong>Pronostic :</strong> <span style="color:var(--green); font-weight:bold;">{b.bet_type}</span> | <strong>Confiance :</strong> {b.confidence}</p>
             {analysis_html}
             {img_html}
         </div>"""
@@ -309,30 +355,28 @@ def page_vip(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Conne
     return render_html("Espace VIP", content, user)
 
 @app.get("/admin")
-def page_admin(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+def page_admin(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
     if not user or not user["is_admin"]:
         return RedirectResponse(url="/login")
     
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM users WHERE is_admin = 0 ORDER BY created_at DESC")
-    users = [dict(row) for row in cursor.fetchall()]
-    cursor.execute("SELECT * FROM bets ORDER BY created_at DESC")
-    bets = [dict(row) for row in cursor.fetchall()]
+    users = db.query(User).filter(User.is_admin == False).order_by(User.created_at.desc()).all()
+    bets = db.query(Bet).order_by(Bet.created_at.desc()).all()
     
     users_rows = ""
     for u in users:
-        status_badge = '<span class="badge badge-won">VIP</span>' if u["is_vip"] else '<span class="badge badge-lost">En attente</span>'
-        val_btn = f'<form action="/admin/users/{u["id"]}/validate" method="POST" style="display:inline;"><button class="btn btn-primary" style="padding:0.3rem 0.6rem; font-size:0.75rem;">Valider VIP</button></form>' if not u["is_vip"] else ""
+        status_badge = '<span class="badge badge-won">VIP</span>' if u.is_vip else '<span class="badge badge-lost">En attente</span>'
+        val_btn = f'<form action="/admin/users/{u.id}/validate" method="POST" style="display:inline;"><button class="btn btn-primary" style="padding:0.3rem 0.6rem; font-size:0.75rem;">Valider VIP</button></form>' if not u.is_vip else ""
         
         users_rows += f"""
         <tr>
-            <td>{u['full_name']}</td>
-            <td>{u['email']}</td>
-            <td><strong>{u['xbet_id']}</strong></td>
+            <td>{u.full_name}</td>
+            <td>{u.email}</td>
+            <td><strong>{u.xbet_id}</strong></td>
             <td>{status_badge}</td>
             <td>
                 {val_btn}
-                <form action="/admin/users/{u['id']}/delete" method="POST" style="display:inline;">
+                <form action="/admin/users/{u.id}/delete" method="POST" style="display:inline;">
                     <button class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.75rem;">Supprimer</button>
                 </form>
             </td>
@@ -342,14 +386,14 @@ def page_admin(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Con
     for b in bets:
         bets_rows += f"""
         <tr>
-            <td>{b['match_title']}</td>
-            <td>{b['bet_type']}</td>
-            <td>{b['odds']}</td>
-            <td><strong>{b['status']}</strong></td>
+            <td>{b.match_title}</td>
+            <td>{b.bet_type}</td>
+            <td>{b.odds}</td>
+            <td><strong>{b.status}</strong></td>
             <td>
-                <form action="/admin/bets/{b['id']}/status" method="POST" style="display:inline;"><input type="hidden" name="status_val" value="WON"><button class="btn btn-primary" style="padding:0.3rem 0.5rem; font-size:0.7rem;">Gagné</button></form>
-                <form action="/admin/bets/{b['id']}/status" method="POST" style="display:inline;"><input type="hidden" name="status_val" value="LOST"><button class="btn btn-danger" style="padding:0.3rem 0.5rem; font-size:0.7rem;">Perdu</button></form>
-                <form action="/admin/bets/{b['id']}/delete" method="POST" style="display:inline;"><button class="btn btn-danger" style="padding:0.3rem 0.5rem; font-size:0.7rem;">Supprimer</button></form>
+                <form action="/admin/bets/{b.id}/status" method="POST" style="display:inline;"><input type="hidden" name="status_val" value="WON"><button class="btn btn-primary" style="padding:0.3rem 0.5rem; font-size:0.7rem;">Gagné</button></form>
+                <form action="/admin/bets/{b.id}/status" method="POST" style="display:inline;"><input type="hidden" name="status_val" value="LOST"><button class="btn btn-danger" style="padding:0.3rem 0.5rem; font-size:0.7rem;">Perdu</button></form>
+                <form action="/admin/bets/{b.id}/delete" method="POST" style="display:inline;"><button class="btn btn-danger" style="padding:0.3rem 0.5rem; font-size:0.7rem;">Supprimer</button></form>
             </td>
         </tr>"""
 
@@ -421,24 +465,34 @@ def page_admin(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Con
     </div>"""
     return render_html("Administration", content, user)
 
+# ------------------------------------------------------------------
+# ACTIONS ADMINISTRATEUR
+# ------------------------------------------------------------------
 @app.post("/admin/users/{user_id}/validate")
-def validate_vip(user_id: int, user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+def validate_vip(user_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
     if not user or not user["is_admin"]: raise HTTPException(status_code=403)
-    cursor = db.cursor()
-    cursor.execute("UPDATE users SET is_vip = 1 WHERE id = ?", (user_id,))
-    db.commit()
+    
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if target_user:
+        target_user.is_vip = True
+        db.commit()
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.post("/admin/users/{user_id}/delete")
-def delete_user(user_id: int, user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+def delete_user(user_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
     if not user or not user["is_admin"]: raise HTTPException(status_code=403)
-    cursor = db.cursor()
-    cursor.execute("DELETE FROM users WHERE id = ? AND is_admin = 0", (user_id,))
-    db.commit()
+    
+    target_user = db.query(User).filter(User.id == user_id, User.is_admin == False).first()
+    if target_user:
+        db.delete(target_user)
+        db.commit()
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.post("/admin/bets/create")
 def create_bet(
+    request: Request,
     match_title: str = Form(...),
     league: str = Form(...),
     bet_type: str = Form(...),
@@ -446,9 +500,9 @@ def create_bet(
     confidence: str = Form(...),
     analysis: str = Form(""),
     b64_image: Optional[str] = Form(""),
-    user: Optional[dict] = Depends(get_current_user),
-    db: sqlite3.Connection = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
+    user = get_current_user(request, db)
     if not user or not user["is_admin"]:
         raise HTTPException(status_code=403)
 
@@ -460,35 +514,47 @@ def create_bet(
 
     image_url = b64_image.strip() if b64_image and len(b64_image.strip()) > 0 else None
 
-    cursor = db.cursor()
-    cursor.execute("""
-        INSERT INTO bets (match_title, league, bet_type, odds, confidence, analysis, image_url)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (match_title, league, bet_type, clean_odds, confidence, analysis, image_url))
+    new_bet = Bet(
+        match_title=match_title,
+        league=league,
+        bet_type=bet_type,
+        odds=clean_odds,
+        confidence=confidence,
+        analysis=analysis,
+        image_url=image_url
+    )
+    db.add(new_bet)
     db.commit()
 
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.post("/admin/bets/{bet_id}/status")
-def update_bet_status(bet_id: int, status_val: str = Form(...), user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+def update_bet_status(bet_id: int, request: Request, status_val: str = Form(...), db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
     if not user or not user["is_admin"]: raise HTTPException(status_code=403)
-    cursor = db.cursor()
-    cursor.execute("UPDATE bets SET status = ? WHERE id = ?", (status_val, bet_id))
-    db.commit()
+    
+    bet = db.query(Bet).filter(Bet.id == bet_id).first()
+    if bet:
+        bet.status = status_val
+        db.commit()
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.post("/admin/bets/{bet_id}/delete")
-def delete_bet(bet_id: int, user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+def delete_bet(bet_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
     if not user or not user["is_admin"]: raise HTTPException(status_code=403)
-    cursor = db.cursor()
-    cursor.execute("DELETE FROM bets WHERE id = ?", (bet_id,))
-    db.commit()
+    
+    bet = db.query(Bet).filter(Bet.id == bet_id).first()
+    if bet:
+        db.delete(bet)
+        db.commit()
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.post("/admin/bets/clear-all")
-def clear_all_bets(user: Optional[dict] = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+def clear_all_bets(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
     if not user or not user["is_admin"]: raise HTTPException(status_code=403)
-    cursor = db.cursor()
-    cursor.execute("DELETE FROM bets")
+    
+    db.query(Bet).delete()
     db.commit()
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
