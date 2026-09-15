@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Request, Form, HTTPException, status, Depends
@@ -13,18 +12,24 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session
 # ------------------------------------------------------------------
 # CONFIGURATION ET CONNEXION SUPABASE (POSTGRESQL)
 # ------------------------------------------------------------------
+# URL de secours vers votre instance Supabase
 DEFAULT_DB_URL = "postgresql://postgres:Mamapapa2024%40%40%40@db.rsnrnxocfwbdepqvyigc.supabase.co:6543/postgres"
+
 DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DB_URL)
 
-# Correctif si Render passe une URL en 'postgres://'
+# Correction pour les formats postgres:// parfois fournis par les hébergeurs
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+# Configuration optimisée du moteur SQLAlchemy pour Render & Supabase
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20
+    pool_pre_ping=True,      # Reconnecte automatiquement si le serveur s'est endormi
+    pool_size=5,             # Conserve au maximum 5 connexions dans le pool
+    max_overflow=10,         # Autorise jusqu'à 10 connexions temporaires en pic
+    connect_args={
+        "connect_timeout": 15 # Laisse 15 secondes max à la connexion réseau
+    }
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -59,7 +64,7 @@ class Bet(Base):
     status = Column(String, default="PENDING")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-# Initialisation des tables et création de l'administrateur
+# Création des tables dans Supabase si elles n'existent pas encore
 Base.metadata.create_all(bind=engine)
 
 SECRET_KEY = "SUPER_SECRET_KEY_VIP_BETS_2026"
@@ -76,6 +81,7 @@ def get_db():
         db.close()
 
 def init_admin():
+    """Initialise l'utilisateur administrateur de façon sécurisée."""
     db = SessionLocal()
     try:
         admin = db.query(User).filter(User.email == "admin@vipbets.com").first()
@@ -91,6 +97,9 @@ def init_admin():
             )
             db.add(admin_user)
             db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Information initialisation Admin: {e}")
     finally:
         db.close()
 
