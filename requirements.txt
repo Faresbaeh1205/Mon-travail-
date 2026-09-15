@@ -4,5 +4,4 @@ sqlalchemy
 psycopg2-binary
 passlib
 itsdangerous
-pydantic
 python-multipart
