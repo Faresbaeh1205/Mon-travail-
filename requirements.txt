@@ -1,5 +1,8 @@
 fastapi
 uvicorn
-passlib[pbkdf2]
+sqlalchemy
+psycopg2-binary
+passlib
 itsdangerous
+pydantic
 python-multipart
