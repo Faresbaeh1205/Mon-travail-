@@ -10,25 +10,25 @@ from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, T
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 # ------------------------------------------------------------------
-# CONFIGURATION ET CONNEXION SUPABASE (POSTGRESQL)
+# CONFIGURATION ET CONNEXION SUPABASE (POOLED IPV4)
 # ------------------------------------------------------------------
-# URL de secours vers votre instance Supabase
-DEFAULT_DB_URL = "postgresql://postgres:Mamapapa2024%40%40%40@db.rsnrnxocfwbdepqvyigc.supabase.co:6543/postgres"
+# URL IPv4 du Pooler Supabase (Session Pooler sur le port 6543)
+DEFAULT_DB_URL = "postgresql://postgres.rsnrnxocfwbdepqvyigc:Mamapapa2024%40%40%40@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
 
 DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DB_URL)
 
-# Correction pour les formats postgres:// parfois fournis par les hébergeurs
+# Correction si Render injecte postgres:// au lieu de postgresql://
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# Configuration optimisée du moteur SQLAlchemy pour Render & Supabase
+# Configuration du moteur SQLAlchemy optimisée pour Render et Supabase
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,      # Reconnecte automatiquement si le serveur s'est endormi
-    pool_size=5,             # Conserve au maximum 5 connexions dans le pool
-    max_overflow=10,         # Autorise jusqu'à 10 connexions temporaires en pic
+    pool_pre_ping=True,       # Vérifie la validité de la connexion avant chaque requête
+    pool_size=5,              # Nombre maximal de connexions conservées dans le pool
+    max_overflow=10,          # Connexions temporaires autorisées en cas de pic
     connect_args={
-        "connect_timeout": 15 # Laisse 15 secondes max à la connexion réseau
+        "connect_timeout": 15 # Dépassement de délai à 15s
     }
 )
 
@@ -64,7 +64,7 @@ class Bet(Base):
     status = Column(String, default="PENDING")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-# Création des tables dans Supabase si elles n'existent pas encore
+# Création automatique des tables si elles n'existent pas sur Supabase
 Base.metadata.create_all(bind=engine)
 
 SECRET_KEY = "SUPER_SECRET_KEY_VIP_BETS_2026"
@@ -81,7 +81,7 @@ def get_db():
         db.close()
 
 def init_admin():
-    """Initialise l'utilisateur administrateur de façon sécurisée."""
+    """Initialise l'administrateur s'il n'existe pas encore dans la base."""
     db = SessionLocal()
     try:
         admin = db.query(User).filter(User.email == "admin@vipbets.com").first()
@@ -99,14 +99,14 @@ def init_admin():
             db.commit()
     except Exception as e:
         db.rollback()
-        print(f"Information initialisation Admin: {e}")
+        print(f"Info Admin Init: {e}")
     finally:
         db.close()
 
 init_admin()
 
 # ------------------------------------------------------------------
-# GESTION UTILISATEUR & INTERACTION
+# SESSIONS ET INTERFACE
 # ------------------------------------------------------------------
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> Optional[dict]:
     session_token = request.cookies.get("session")
