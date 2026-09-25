@@ -1,7 +1,7 @@
 import os
 from typing import Optional
 
-from fastapi import FastAPI, Request, Form, HTTPException, status, Depends
+from fastapi import FastAPI, Request, Form, HTTPException, status, Depends, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from passlib.context import CryptContext
 from itsdangerous import URLSafeTimedSerializer, BadSignature
@@ -12,23 +12,20 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session
 # ------------------------------------------------------------------
 # CONFIGURATION ET CONNEXION SUPABASE (POOLED IPV4)
 # ------------------------------------------------------------------
-# URL IPv4 du Pooler Supabase (Session Pooler sur le port 6543)
 DEFAULT_DB_URL = "postgresql://postgres.rsnrnxocfwbdepqvyigc:Mamapapa2024%40%40%40@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
 
 DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DB_URL)
 
-# Correction si Render injecte postgres:// au lieu de postgresql://
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# Configuration du moteur SQLAlchemy optimisée pour Render et Supabase
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,       # Vérifie la validité de la connexion avant chaque requête
-    pool_size=5,              # Nombre maximal de connexions conservées dans le pool
-    max_overflow=10,          # Connexions temporaires autorisées en cas de pic
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
     connect_args={
-        "connect_timeout": 15 # Dépassement de délai à 15s
+        "connect_timeout": 15
     }
 )
 
@@ -64,7 +61,6 @@ class Bet(Base):
     status = Column(String, default="PENDING")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-# Création automatique des tables si elles n'existent pas sur Supabase
 Base.metadata.create_all(bind=engine)
 
 SECRET_KEY = "SUPER_SECRET_KEY_VIP_BETS_2026"
@@ -104,6 +100,19 @@ def init_admin():
         db.close()
 
 init_admin()
+
+# ------------------------------------------------------------------
+# ROUTES PUSHALERT SERVICE WORKER
+# ------------------------------------------------------------------
+SW_CONTENT = 'importScripts("https://cdn.pushalert.co/sw-91255.js");'
+
+@app.get("/sw.js", include_in_schema=False)
+def get_sw():
+    return Response(content=SW_CONTENT, media_type="application/javascript")
+
+@app.get("/sw-91255.js", include_in_schema=False)
+def get_sw_direct():
+    return Response(content=SW_CONTENT, media_type="application/javascript")
 
 # ------------------------------------------------------------------
 # SESSIONS ET INTERFACE
@@ -181,6 +190,16 @@ def render_html(title: str, content: str, user: Optional[dict] = None) -> HTMLRe
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title}</title>
     <style>{CSS_STYLE}</style>
+    <!-- PushAlert Unified Code -->
+    <script type="text/javascript">
+        (function(d, t) {{
+            var g = d.createElement(t),
+            s = d.getElementsByTagName(t)[0];
+            g.src = "https://cdn.pushalert.co/unified_602c5217c4c229cd2935ff6e2aa9b750.js";
+            s.parentNode.insertBefore(g, s);
+        }}(document, "script"));
+    </script>
+    <!-- End PushAlert Unified Code -->
 </head>
 <body>
     <nav class="navbar">
@@ -407,7 +426,7 @@ def page_admin(request: Request, db: Session = Depends(get_db)):
         </tr>"""
 
     clear_history_btn = """
-    <form action="/admin/bets/clear-all" method="POST" onsubmit="return confirm('Attention: Voulez-vous vraiment effacer tout l\'historique des paris ?');" style="margin-top:1rem;">
+    <form action="/admin/bets/clear-all" method="POST" onsubmit="return confirm('Attention: Voulez-vous vraiment effacer tout l\\'historique des paris ?');" style="margin-top:1rem;">
         <button class="btn btn-danger" style="width:auto; padding:0.6rem 1rem;">Effacer tout l'historique des paris</button>
     </form>
     """ if bets else ""
