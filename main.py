@@ -10,14 +10,17 @@ from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, T
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 # ------------------------------------------------------------------
-# CONFIGURATION ET CONNEXION SUPABASE (POOLED IPV4)
+# CONFIGURATION ET CONNEXION SUPABASE (POOLED IPV4 WITH PSYCOPG2)
 # ------------------------------------------------------------------
-DEFAULT_DB_URL = "postgresql://postgres.rsnrnxocfwbdepqvyigc:Mamapapa2024%40%40%40@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
+DEFAULT_DB_URL = "postgresql+psycopg2://postgres.rsnrnxocfwbdepqvyigc:Mamapapa2024%40%40%40@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
 
 DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DB_URL)
 
+# Correction dynamique du driver dialecte pour SQLAlchemy
 if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 engine = create_engine(
     DATABASE_URL,
